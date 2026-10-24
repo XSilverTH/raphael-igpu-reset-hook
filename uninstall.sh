@@ -9,6 +9,7 @@ fi
 for target in \
   /etc/libvirt/hooks/qemu.d/50-raphael-igpu-reset \
   /usr/local/libexec/raphael-igpu-reset/reseed \
+  /usr/local/libexec/raphael-igpu-reset/mode2-reset-evidence.sh \
   /etc/raphael-igpu-reset.conf; do
   [[ ! -e $target ]] || unlink "$target"
 done

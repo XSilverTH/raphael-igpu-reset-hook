@@ -6,9 +6,16 @@ Experimental workaround for AMD Raphael iGPU passthrough guests that work on
 the first start after a host reboot, but produce a white/corrupted physical
 display and AMD-Vi `IO_PAGE_FAULT` events on later guest starts.
 
-The hook temporarily binds the iGPU to the host `amdgpu` driver before QEMU
-starts. Removing it from `amdgpu` triggers a `MODE2 reset`; the helper then
-returns the device to `vfio-pci` and allows libvirt to continue.
+The hook normally binds the iGPU to the host `amdgpu` driver, waits for it to
+claim the device, then unbinds it to trigger a `MODE2 reset`. The helper
+restores the device to `vfio-pci` before allowing libvirt to continue.
+
+On some machines, the `amdgpu` probe itself fails after triggering a kernel
+`MODE2 reset` (for example, after a PSP ring creation error). In that case the
+helper accepts the failed probe only when the kernel journal records a MODE2
+reset for this exact GPU after this reseed began, and rollback confirms the GPU
+is bound to `vfio-pci`. Missing journal evidence or an unconfirmed rollback
+remains a failure; other probe and validation failures are not suppressed.
 
 ## Tested configuration
 
@@ -108,11 +115,18 @@ sudo ls -lt /var/log/raphael-igpu-reset/
 sudo tail -100 /var/log/raphael-igpu-reset/hook-*.log
 ```
 
-A successful run ends with:
+A successful run ends with one of:
 
 ```text
 PASS: preventive reset completed
+PASS: MODE2 reset completed during failed amdgpu probe; vfio-pci restored.
 ```
+
+On some Raphael GPU states, `amdgpu` may fail PSP initialization but perform a
+MODE2 reset while cleaning up the failed probe. The helper accepts that fallback
+only when the kernel journal records a new MODE2 reset for the configured GPU
+without a reset-failed message and the GPU is confirmed back on `vfio-pci`.
+Other probe failures still block VM startup.
 
 ## Uninstall
 
@@ -133,11 +147,13 @@ The installer creates:
 /etc/raphael-igpu-reset.conf
 /etc/libvirt/hooks/qemu.d/50-raphael-igpu-reset
 /usr/local/libexec/raphael-igpu-reset/reseed
+/usr/local/libexec/raphael-igpu-reset/mode2-reset-evidence.sh
 ```
 
 The hook filters libvirt's `guest prepare begin` arguments. It never calls
-`virsh` from inside the hook. A failed reset returns a non-zero status so
-libvirt refuses to start QEMU with an uncertain GPU state.
+`virsh` from inside the hook. A failed reset returns a non-zero status unless a
+matching kernel MODE2 reset is confirmed and the GPU is restored to `vfio-pci`.
+
 
 ## Important limitations
 

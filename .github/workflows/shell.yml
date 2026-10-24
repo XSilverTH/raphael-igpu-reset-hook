@@ -17,4 +17,4 @@ jobs:
       - name: Smoke tests
         run: ./tests/smoke.sh
       - name: ShellCheck
-        run: shellcheck reseed 50-raphael-igpu-reset manual-reseed.sh diagnose.sh install.sh uninstall.sh tests/smoke.sh
+        run: shellcheck reseed mode2-reset-evidence.sh 50-raphael-igpu-reset manual-reseed.sh diagnose.sh install.sh uninstall.sh tests/smoke.sh

@@ -48,9 +48,10 @@ readonly helper_dir=/usr/local/libexec/raphael-igpu-reset
 readonly hook_dir=/etc/libvirt/hooks/qemu.d
 readonly config=/etc/raphael-igpu-reset.conf
 readonly installed_helper=$helper_dir/reseed
+readonly installed_evidence=$helper_dir/mode2-reset-evidence.sh
 readonly installed_hook=$hook_dir/50-raphael-igpu-reset
 
-for target in "$config" "$installed_helper" "$installed_hook"; do
+for target in "$config" "$installed_helper" "$installed_evidence" "$installed_hook"; do
   if [[ -e $target ]]; then
     echo "Refusing to overwrite existing path: $target" >&2
     echo "Run uninstall.sh first if this project created it." >&2
@@ -68,6 +69,7 @@ if [[ -n $audio && ! -e /sys/bus/pci/devices/$audio ]]; then
 fi
 
 bash -n "$source_dir/reseed"
+bash -n "$source_dir/mode2-reset-evidence.sh"
 bash -n "$source_dir/50-raphael-igpu-reset"
 
 temporary=$(mktemp /etc/raphael-igpu-reset.conf.XXXXXX)
@@ -78,6 +80,7 @@ printf "EXPECTED_GPU_ID='1002:164e'\nEXPECTED_AUDIO_ID='1002:1640'\n" >>"$tempor
 
 install -d -m 0755 "$helper_dir" "$hook_dir"
 install -m 0755 "$source_dir/reseed" "$installed_helper"
+install -m 0644 "$source_dir/mode2-reset-evidence.sh" "$installed_evidence"
 install -m 0755 "$source_dir/50-raphael-igpu-reset" "$installed_hook"
 install -m 0600 "$temporary" "$config"
 unlink "$temporary"

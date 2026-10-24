@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+# shellcheck source=mode2-reset-evidence.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/mode2-reset-evidence.sh"
 
 readonly config=/etc/raphael-igpu-reset.conf
 readonly log_dir=/var/log/raphael-igpu-reset
@@ -112,6 +114,7 @@ echo "Started: $(date --iso-8601=seconds)"
 echo "PCI IDs: GPU=$gpu_id audio=${audio_id:-not-configured}"
 echo "Initial drivers: GPU=$gpu_driver audio=$audio_driver"
 
+
 bind_gpu_to() {
   local target=$1
   local current
@@ -138,6 +141,9 @@ restore_vfio() {
     echo "ERROR: could not return $GPU_BDF to vfio-pci."
   fi
 }
+reset_cursor=''
+reset_cursor=$(mode2_reset_cursor) || echo "Could not capture kernel journal cursor; probe fallback disabled."
+
 trap restore_vfio EXIT
 
 modprobe amdgpu
@@ -150,6 +156,18 @@ done
 
 if [[ $(driver_name "$device") != amdgpu ]]; then
   echo "amdgpu did not claim $GPU_BDF."
+  if mode2_reset_succeeded_since "$reset_cursor" "$GPU_BDF"; then
+    echo "Kernel journal confirms a successful MODE2 reset for $GPU_BDF during this probe."
+    restore_vfio
+    if [[ $(driver_name "$device") == vfio-pci ]]; then
+      trap - EXIT
+      echo "PASS: MODE2 reset completed during failed amdgpu probe; vfio-pci restored."
+      exit 0
+    fi
+    echo "ERROR: MODE2 reset observed but vfio-pci rollback was not confirmed."
+  else
+    echo "No matching MODE2 reset evidence after reseed began; failing closed."
+  fi
   exit 1
 fi
 
